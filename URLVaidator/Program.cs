@@ -50,15 +50,23 @@ namespace URLVaidator
                             try
                             {
                                 _request = (HttpWebRequest)WebRequest.Create(url);
-                                using (WebResponse response = _request.GetResponse())
-                                {
-                                    text = response.ResponseUri.ToString();
+                                //using (WebResponse response = _request.GetResponse())
+                                //{
+                                //    text = response.ResponseUri.ToString();
 
-                                    //using (StreamReader reader = new StreamReader(response.GetResponseStream()))
-                                    //{
-                                    //    text = reader.ReadToEnd();
-                                    //}
-                                }
+                                //    //using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                                //    //{
+                                //    //    text = reader.ReadToEnd();
+                                //    //}
+                                //}
+
+                                //HttpStatusCode status = GetHeaders(url);
+
+                                //Console.WriteLine("Status---> " + status);
+
+
+                                text = GetFinalRedirectedUrl(url);
+
                                 Console.WriteLine(text);
                             }
                             catch (Exception ex)
@@ -68,6 +76,50 @@ namespace URLVaidator
                     }
                 }
             }
+        }
+
+        public static string GetFinalRedirectedUrl(string url)
+        {
+            string result = string.Empty;
+
+            Uri Uris = new Uri(url);
+
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(Uris);
+            req.Method = "HEAD";
+            req.AllowAutoRedirect = false;
+
+            HttpWebResponse myResp = (HttpWebResponse)req.GetResponse();
+            if (myResp.StatusCode == HttpStatusCode.Redirect)
+            {
+                string temp = myResp.GetResponseHeader("Location");
+                //Recursive call
+                //result = GetFinalRedirectedUrl(temp);
+                result = temp;
+            }
+            else
+            {
+                result = url;
+            }
+
+            return result;
+        }
+
+        public static HttpStatusCode GetHeaders(string url)
+        {
+            HttpStatusCode result = default(HttpStatusCode);
+
+            var request = HttpWebRequest.Create(url);
+            request.Method = "HEAD";
+            using (var response = request.GetResponse() as HttpWebResponse)
+            {
+                if (response != null)
+                {
+                    result = response.StatusCode;
+                    response.Close();
+                }
+            }
+
+            return result;
         }
 
         public static void CreateExcel()
