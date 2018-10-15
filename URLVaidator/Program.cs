@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -11,24 +12,38 @@ namespace URLVaidator
 {
     class Program
     {
+        static DataTable redirectsTable;
+
         static void Main()
         {
             Excel.Application excel = new Excel.Application();
-            Excel.Workbook wb = excel.Workbooks.Open(@"C:\Personal\Tools\URLVaidator\URLVaidator\Dynamics365-Pages-Redirect.xlsx");
+            Excel.Workbook wb = excel.Workbooks.Open(@"D:\git-skm\URL-Validator\URLVaidator\Dynamics365-Pages-Redirect-1.xlsx");
             Excel.Worksheet worksheet = (Excel.Worksheet)wb.ActiveSheet;
 
             IterateRows(worksheet);
+            CreateExcel();
             Console.Read();
         }
 
         public static void IterateRows(Excel.Worksheet worksheet)
         {
+            redirectsTable = new DataTable();
+            redirectsTable.Columns.Add("Locale", typeof(string));
+            redirectsTable.Columns.Add("Page URL", typeof(string));
+            redirectsTable.Columns.Add("Redirect URL", typeof(string));
+
             //Get the used Range
             Excel.Range usedRange = worksheet.UsedRange;
 
             //Iterate the rows in the used range
+            int count = 0;
+            
             foreach (Excel.Range row in usedRange.Rows)
             {
+                string locale = string.Empty, 
+                    url = string.Empty, 
+                    redirectURL = string.Empty;
+
                 //while (row.Row != 0)
                 {
 
@@ -39,91 +54,189 @@ namespace URLVaidator
                     String[] rowData = new String[row.Columns.Count];
                     for (int i = 0; i < row.Columns.Count; i++)
                     {
-                        if (i == 1)
+                        //if (i == 1 || i == 2)
                         {
                             rowData[i] = row.Cells[1, i + 1].Value2.ToString();
                             Console.WriteLine(rowData[i]);
-
-                            WebRequest _request;
-                            string text;
-                            string url = rowData[i];
-                            try
+                            if (i == 2)
                             {
-                                _request = (HttpWebRequest)WebRequest.Create(url);
-                                //using (WebResponse response = _request.GetResponse())
-                                //{
-                                //    text = response.ResponseUri.ToString();
-
-                                //    //using (StreamReader reader = new StreamReader(response.GetResponseStream()))
-                                //    //{
-                                //    //    text = reader.ReadToEnd();
-                                //    //}
-                                //}
-
-                                //HttpStatusCode status = GetHeaders(url);
-
-                                //Console.WriteLine("Status---> " + status);
-
-
-                                text = GetFinalRedirectedUrl(url);
-
-                                Console.WriteLine(text);
+                                locale = rowData[i];
                             }
-                            catch (Exception ex)
-                            { }
-                            Console.WriteLine("----------- " + i + " ----------------");
+                            WebRequest _request;
+                            if (i == 1)
+                            {
+                                url = rowData[i];
+                                try
+                                {
+                                    _request = (HttpWebRequest)WebRequest.Create(url);
+
+                                    redirectURL = GetFinalRedirect(url);
+
+                                    Console.WriteLine(redirectURL);
+
+
+                                }
+                                catch (Exception ex)
+                                { }
+                            }
+
+                            Console.WriteLine("----------- " + count++ + " ----------------");
                         }
                     }
                 }
+                redirectsTable.Rows.Add(locale, url, redirectURL);
             }
         }
-
-        public static string GetFinalRedirectedUrl(string url)
+                
+        public static string GetFinalRedirect(string url)
         {
-            string result = string.Empty;
+            if (string.IsNullOrWhiteSpace(url))
+                return url;
 
-            Uri Uris = new Uri(url);
-
-            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(Uris);
-            req.Method = "HEAD";
-            req.AllowAutoRedirect = false;
-
-            HttpWebResponse myResp = (HttpWebResponse)req.GetResponse();
-            if (myResp.StatusCode == HttpStatusCode.Redirect)
+            int maxRedirCount = 8;  // prevent infinite loops
+            string newUrl = url;
+            do
             {
-                string temp = myResp.GetResponseHeader("Location");
-                //Recursive call
-                //result = GetFinalRedirectedUrl(temp);
-                result = temp;
-            }
-            else
-            {
-                result = url;
-            }
-
-            return result;
-        }
-
-        public static HttpStatusCode GetHeaders(string url)
-        {
-            HttpStatusCode result = default(HttpStatusCode);
-
-            var request = HttpWebRequest.Create(url);
-            request.Method = "HEAD";
-            using (var response = request.GetResponse() as HttpWebResponse)
-            {
-                if (response != null)
+                HttpWebRequest req = null;
+                HttpWebResponse resp = null;
+                try
                 {
-                    result = response.StatusCode;
-                    response.Close();
-                }
-            }
+                    req = (HttpWebRequest)HttpWebRequest.Create(url);
+                    req.Method = "HEAD";
+                    req.AllowAutoRedirect = false;
+                    resp = (HttpWebResponse)req.GetResponse();
+                    switch (resp.StatusCode)
+                    {
+                        case HttpStatusCode.OK:
+                            return newUrl;
+                        case HttpStatusCode.Redirect:
+                        case HttpStatusCode.MovedPermanently:
+                        case HttpStatusCode.RedirectKeepVerb:
+                        case HttpStatusCode.RedirectMethod:
+                            newUrl = resp.Headers["Location"];
+                            if (newUrl == null)
+                                return url;
 
-            return result;
+                            if (newUrl.IndexOf("://", System.StringComparison.Ordinal) == -1)
+                            {
+                                // Doesn't have a URL Schema, meaning it's a relative or absolute URL
+                                Uri u = new Uri(new Uri(url), newUrl);
+                                newUrl = u.ToString();
+                            }
+                            break;
+                        default:
+                            return newUrl;
+                    }
+                    url = newUrl;
+                }
+                catch (WebException)
+                {
+                    // Return the last known good URL
+                    return newUrl;
+                }
+                catch (Exception ex)
+                {
+                    return null;
+                }
+                finally
+                {
+                    if (resp != null)
+                        resp.Close();
+                }
+            } while (maxRedirCount-- > 0);
+
+            return newUrl;
+        }
+
+        public static System.Data.DataTable ExportToExcel()
+        {
+            DataTable table = new DataTable();
+            table.Columns.Add("Page URL", typeof(string));
+            table.Columns.Add("Redirect URL", typeof(string));
+
+            table.Rows.Add("Amar", "M");
+            table.Rows.Add("Mohit", "M");
+            
+            return table;
         }
 
         public static void CreateExcel()
         {
+            Excel.Application excel;
+            Excel.Workbook worKbooK;
+            Excel.Worksheet worKsheeT;
+            Excel.Range celLrangE;
+
+            try
+            {
+                excel = new Microsoft.Office.Interop.Excel.Application();
+                excel.Visible = false;
+                excel.DisplayAlerts = false;
+                worKbooK = excel.Workbooks.Add(Type.Missing);
+
+
+                worKsheeT = (Microsoft.Office.Interop.Excel.Worksheet)worKbooK.ActiveSheet;
+                worKsheeT.Name = "Redirects";
+
+                worKsheeT.Range[worKsheeT.Cells[1, 1], worKsheeT.Cells[1, 8]].Merge();
+                worKsheeT.Cells[1, 1] = "Redirects";
+                worKsheeT.Cells.Font.Size = 15;
+
+
+                int rowcount = 2;
+
+                foreach (DataRow datarow in redirectsTable.Rows)
+                {
+                    rowcount += 1;
+                    for (int i = 1; i <= redirectsTable.Columns.Count; i++)
+                    {
+
+                        if (rowcount == 3)
+                        {
+                            worKsheeT.Cells[2, i] = redirectsTable.Columns[i - 1].ColumnName;
+                        }
+
+                        worKsheeT.Cells[rowcount, i] = datarow[i - 1].ToString();
+
+                        if (rowcount > 3)
+                        {
+                            if (i == redirectsTable.Columns.Count)
+                            {
+                                if (rowcount % 2 == 0)
+                                {
+                                    celLrangE = worKsheeT.Range[worKsheeT.Cells[rowcount, 1], worKsheeT.Cells[rowcount, redirectsTable.Columns.Count]];
+                                }
+
+                            }
+                        }
+
+                    }
+
+                }
+
+                celLrangE = worKsheeT.Range[worKsheeT.Cells[1, 1], worKsheeT.Cells[rowcount, redirectsTable.Columns.Count]];
+                celLrangE.EntireColumn.AutoFit();
+                Microsoft.Office.Interop.Excel.Borders border = celLrangE.Borders;
+                border.LineStyle = Microsoft.Office.Interop.Excel.XlLineStyle.xlContinuous;
+                border.Weight = 2d;
+
+                celLrangE = worKsheeT.Range[worKsheeT.Cells[1, 1], worKsheeT.Cells[2, redirectsTable.Columns.Count]];
+
+                worKbooK.SaveAs("Dynamics Page Redirects");
+                worKbooK.Close();
+                excel.Quit();
+
+            }
+            catch (Exception ex)
+            {
+                
+            }
+            finally
+            {
+                worKsheeT = null;
+                celLrangE = null;
+                worKbooK = null;
+            }
         }
     }
 }

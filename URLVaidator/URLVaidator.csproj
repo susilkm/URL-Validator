@@ -47,9 +47,11 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="System\Drawing\Color.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Dynamics365-Pages-Redirect-1.xlsx" />
     <None Include="Dynamics365-Pages-Redirect.xlsx" />
     <None Include="Dynamics365-Pages.xlsx" />
     <None Include="Dynamics365.xlsx" />
