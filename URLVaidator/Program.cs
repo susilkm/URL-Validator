@@ -17,12 +17,27 @@ namespace URLVaidator
         static void Main()
         {
             Excel.Application excel = new Excel.Application();
-            Excel.Workbook wb = excel.Workbooks.Open(@"D:\git-skm\URL-Validator\URLVaidator\Dynamics365-Pages-Redirect-1.xlsx");
+            Excel.Workbook wb = excel.Workbooks.Open(@"C:\Personal\Tools\URLVaidator\URLVaidator\Dynamics365-Pages-Redirect-1.xlsx");
             Excel.Worksheet worksheet = (Excel.Worksheet)wb.ActiveSheet;
 
             IterateRows(worksheet);
-            CreateExcel();
-            Console.Read();
+            
+            //Create a DataSet with the existing DataTables
+            DataSet ds = new DataSet("Dynamics365");
+            ds.Tables.Add(redirectsTable);
+
+            try
+            {
+                ExportDataSetToExcel(ds);
+            }
+            catch (Exception ex)
+            {
+            }
+            finally
+            {
+                Console.WriteLine("Excel sheet update successfull");
+            }
+
         }
 
         public static void IterateRows(Excel.Worksheet worksheet)
@@ -159,6 +174,41 @@ namespace URLVaidator
             
             return table;
         }
+
+        public static void ExportDataSetToExcel(DataSet ds)
+        {
+            //Creae an Excel application instance
+            Excel.Application excelApp = new Excel.Application();
+
+            //Create an Excel workbook instance and open it from the predefined location
+            Excel.Workbook excelWorkBook = excelApp.Workbooks.Open(@"C:\Personal\Tools\URLVaidator\Dynamics365-Sitemuse-Redirects.xlsx");
+
+            foreach (DataTable table in ds.Tables)
+            {
+                //Add a new worksheet to workbook with the Datatable name
+                Excel.Worksheet excelWorkSheet = excelWorkBook.Sheets.Add();
+                excelWorkSheet.Name = table.TableName;
+
+                for (int i = 1; i < table.Columns.Count + 1; i++)
+                {
+                    excelWorkSheet.Cells[1, i] = table.Columns[i - 1].ColumnName;
+                }
+
+                for (int j = 0; j < table.Rows.Count; j++)
+                {
+                    for (int k = 0; k < table.Columns.Count; k++)
+                    {
+                        excelWorkSheet.Cells[j + 2, k + 1] = table.Rows[j].ItemArray[k].ToString();
+                    }
+                }
+            }
+
+            excelWorkBook.Save();
+            excelWorkBook.Close();
+            excelApp.Quit();
+
+        }
+
 
         public static void CreateExcel()
         {
